@@ -1,0 +1,254 @@
+<html>
+
+<head>
+<title>ICG WebGL &mdash; HW1</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript" src="./gl-matrix-min.js"></script>
+
+<script type="module">
+    import { shaders, createProgram } from "./shader2.js";
+    const { mat4 } = glMatrix;
+
+    let triangles = 0;
+    let teapotAngle = 0;
+    let lastTime = 0;
+
+    const canvas = document.getElementById('ICG-canvas');
+    const gl = canvas.getContext("webgl2");
+    if (!gl) {
+        alert('WebGL not supported. Try the latest chrome browser.');
+    }
+
+    const pMatrix = mat4.create();
+    mat4.perspective(pMatrix, Math.PI * 0.5, gl.canvas.width / gl.canvas.height, 0.1, 100);
+
+
+    ////////////////////////////////////
+    const prog = createProgram(gl, shaders.flat);
+
+    prog.mvMatrix = mat4.create();
+    prog.mvMatrixBase = mat4.create();
+    mat4.translate(prog.mvMatrixBase, prog.mvMatrixBase, [-50, 0, -50]);
+    
+    gl.useProgram(prog)
+    gl.uniform3fv(gl.getUniformLocation(prog, "color3"), [1, 215/255, 0]);
+    gl.uniformMatrix4fv(gl.getUniformLocation(prog, "Perspective4"), false, pMatrix);
+    prog.mvMatrixUniform = gl.getUniformLocation(prog, "World4");
+    prog.model3 = gl.getAttribLocation(prog, "model3");
+    prog.normal3 = gl.getAttribLocation(prog, "normal3");
+
+
+    /////////////////////////////////////
+    const flat = createProgram(gl, shaders.Phong);
+
+    flat.mvMatrix = mat4.create();
+    mat4.fromTranslation(flat.mvMatrix, [0, 0, -30]);
+
+    gl.useProgram(flat);
+    gl.uniform3fv(gl.getUniformLocation(flat, "color3"), [0.6, 0.6, 0.6]);
+    gl.uniformMatrix4fv(gl.getUniformLocation(flat, "Perspective4"), false, pMatrix);
+    flat.mvMatrixUniform = gl.getUniformLocation(flat, "World4");
+    flat.model3 = gl.getAttribLocation(flat, "model3");
+    flat.normal3 = gl.getAttribLocation(flat, "normal3");
+
+    /////////////////////////////////////
+    const gouraud = createProgram(gl, shaders.Gouraud);
+    gouraud.mvMatrix = mat4.create();
+    gouraud.mvMatrixBase = mat4.create();
+    mat4.translate(gouraud.mvMatrixBase, gouraud.mvMatrixBase, [50, 0, -50]);
+
+    gl.useProgram(gouraud);
+    gl.uniform3fv(gl.getUniformLocation(gouraud, "color3"), [0, 0, 0.6]);
+    gl.uniformMatrix4fv(gl.getUniformLocation(gouraud, "Perspective4"), false, pMatrix);
+    gouraud.mvMatrixUniform = gl.getUniformLocation(gouraud, "World4");
+    gouraud.model3 = gl.getAttribLocation(gouraud, "model3");
+    gouraud.normal3 = gl.getAttribLocation(gouraud, "normal3");
+
+
+    gl.clearColor(0.0, 0.2, 0.2, 1.0);
+    gl.enable(gl.DEPTH_TEST);
+    // gl.enable(gl.CULL_FACE);
+
+    function handleLoadedTeapot(teapotData) {
+        triangles = teapotData.vertexPositions.length / 3;
+
+        ////////////////////////////////
+        gl.useProgram(prog);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(teapotData.vertexPositions), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(flat.model3, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(flat.model3);
+
+        const normals = new Float32Array(teapotData.vertexNormals);
+        for (let i = 0; i < normals.length; i += 9) {
+            const x = normals[i    ] + normals[i + 3] + normals[i + 6];
+            const y = normals[i + 1] + normals[i + 4] + normals[i + 7];
+            const z = normals[i + 2] + normals[i + 5] + normals[i + 8];
+            normals[i    ] = normals[i + 3] = normals[i + 6] = x;
+            normals[i + 1] = normals[i + 4] = normals[i + 7] = y;
+            normals[i + 2] = normals[i + 5] = normals[i + 8] = z;
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(prog.normal3, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(prog.normal3);
+
+        ////////////////////////////////
+        gl.useProgram(flat);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(teapotData.vertexPositions), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(flat.model3, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(flat.model3);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(teapotData.vertexNormals), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(flat.normal3, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(flat.normal3);
+
+        ////////////////////////////////
+        gl.useProgram(gouraud);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(teapotData.vertexPositions), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(gouraud.model3, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(gouraud.model3);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(teapotData.vertexNormals), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(gouraud.normal3, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(gouraud.normal3);
+    }
+
+    fetch('./Teapot.json')
+        .then(res => res.json())
+        .then(text => {
+            handleLoadedTeapot(text);
+            tick();
+        });
+    
+    function drawScene() {
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        gl.useProgram(prog);
+        mat4.rotateY(prog.mvMatrix, prog.mvMatrixBase, teapotAngle);
+        gl.uniformMatrix4fv(prog.mvMatrixUniform, false, prog.mvMatrix);
+        gl.drawArrays(gl.TRIANGLES, 0, triangles);
+
+        gl.useProgram(flat);
+        gl.uniformMatrix4fv(flat.mvMatrixUniform, false, flat.mvMatrix);
+        gl.drawArrays(gl.TRIANGLES, 0, triangles);
+
+        gl.useProgram(gouraud);
+        mat4.rotateY(gouraud.mvMatrix, gouraud.mvMatrixBase, -teapotAngle);
+        gl.uniformMatrix4fv(gouraud.mvMatrixUniform, false, gouraud.mvMatrix);
+        gl.drawArrays(gl.TRIANGLES, 0, triangles);
+    }
+
+    const twoPI = 2 * Math.PI;
+    const angularVelocity = twoPI / 1000 / 8;
+    let pause = false;
+    const transform = {
+        translate: [0, 0, -30],
+        scale: [1, 1, 1],
+        rotate: [0, 0, 0],
+        shear: 0,
+    }
+    function tick() {
+        if (pause) {
+            mat4.fromScaling(flat.mvMatrix, transform.scale);
+            mat4.translate(flat.mvMatrix, flat.mvMatrix, transform.translate);
+            mat4.rotateX(flat.mvMatrix, flat.mvMatrix, transform.rotate[0]);
+            mat4.rotateY(flat.mvMatrix, flat.mvMatrix, transform.rotate[1]);
+            mat4.rotateZ(flat.mvMatrix, flat.mvMatrix, transform.rotate[2]);
+            const sh = mat4.create();
+            sh[1] = transform.shear;
+            mat4.mul(flat.mvMatrix, sh, flat.mvMatrix);
+            pause = false;
+        }
+        requestAnimationFrame(tick);
+        drawScene();
+        const timeNow = Date.now();
+        const elapsed = timeNow - lastTime;
+        teapotAngle = (teapotAngle + angularVelocity * elapsed) % twoPI;
+        lastTime = timeNow;
+    }
+
+    document.getElementById("translateX").onchange = function() {
+        transform.translate[0] = parseFloat(this.value);
+        pause = true;
+    }
+    document.getElementById("translateY").onchange = function() {
+        transform.translate[1] = parseFloat(this.value);
+        pause = true;
+    }
+    document.getElementById("translateZ").onchange = function() {
+        transform.translate[2] = parseFloat(this.value) - 30;
+        pause = true;
+    }
+    document.getElementById("scaleX").onchange = function() {
+        transform.scale[0] = parseFloat(this.value);
+        pause = true;
+    }
+    document.getElementById("scaleY").onchange = function() {
+        transform.scale[1] = parseFloat(this.value);
+        pause = true;
+    }
+    document.getElementById("scaleZ").onchange = function() {
+        transform.scale[2] = parseFloat(this.value);
+        pause = true;
+    }
+    document.getElementById("rotateX").onchange = function() {
+        transform.rotate = [parseFloat(this.value), 0, 0];
+        this.value = 0;
+        pause = true;
+    }
+    document.getElementById("rotateY").onchange = function() {
+        transform.rotate = [0, parseFloat(this.value), 0];
+        this.value = 0;
+        pause = true;
+    }
+    document.getElementById("rotateZ").onchange = function() {
+        transform.rotate = [0, 0, parseFloat(this.value)];
+        this.value = 0;
+        pause = true;
+    }
+    document.getElementById("shearXY").onchange = function() {
+        transform.shear = parseFloat(this.value);
+        pause = true;
+    }
+</script>
+</head>
+
+<body>
+    <canvas id="ICG-canvas" width="1024" height="600"></canvas>
+    <br/>
+    <label for="translateX">Translate X:</label>
+    <input id="translateX"type="range" min="-20" max="20" value="0" />
+    <label for="translateY">Translate Y:</lable>
+    <input id="translateY"type="range" min="-20" max="20" value="0" />
+    <label for="translateZ">Translate Z:</label>
+    <input id="translateZ"type="range" min="-20" max="20" value="0" />
+    <br/>
+    <label for="scaleX">Scale X:</label>
+    <input id="scaleX" type="range" min="0.5" max="2.0" value="1.0" step="any" />
+    <label for="scaleY">Scale Y:</label>
+    <input id="scaleY" type="range" min="0.5" max="2.0" value="1.0" step="any" />
+    <label for="scaleZ">Scale Z:</label>
+    <input id="scaleZ" type="range" min="0.5" max="2.0" value="1.0" step="any" />
+    <br/>
+    <label for="rotateX">Rotate X:</label>
+    <input id="rotateX" type="range" min="-3.1416" max="3.1416" value="0" step="any" />
+    <label for="rotateY">Rotate Y:</label>
+    <input id="rotateY" type="range" min="-3.1416" max="3.1416" value="0" step="any" />
+    <label for="rotateZ">Rotate Z:</label>
+    <input id="rotateZ" type="range" min="-3.1416" max="3.1416" value="0" step="any" />
+    <br/>
+    <label for="shearXY">Shear XY:</label>
+    <input id="shearXY" type="range" min="-2" max="2" value="0" step="any" />
+</body>
+
+</html>
